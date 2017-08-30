@@ -2,7 +2,9 @@
 # pylint: disable=C0111,too-many-arguments,too-many-instance-attributes,too-many-locals,redefined-outer-name,fixme
 # pylint: disable=superfluous-parens, no-member, invalid-name
 import sys
-sys.path.insert(0, "../../python")
+import argparse
+
+# sys.path.insert(0, "../../python")
 import mxnet as mx
 import numpy as np
 import cv2, random
@@ -46,17 +48,16 @@ def getnet():
     return mx.symbol.SoftmaxOutput(data = fc2, name = "softmax")
 
 
-
-def TestRecognizeOne(img):
+def TestRecognizeOne(prefix, epoch, img):
     img = cv2.resize(img,(120,30))
-    cv2.imshow("img",img);
+    # cv2.imshow("img",img);
 
     print img.shape
     img = np.swapaxes(img,0,2)
     img = np.swapaxes(img,1,2)
     print img.shape
     batch_size = 1
-    _, arg_params, __ = mx.model.load_checkpoint("cnn-ocr", 1)
+    _, arg_params, __ = mx.model.load_checkpoint(prefix, epoch)
     data_shape = [("data", (batch_size, 3, 30, 120))]
     input_shapes = dict(data_shape)
     sym = getnet()
@@ -78,7 +79,19 @@ def TestRecognizeOne(img):
 
         line += chars[result]+" "
     print 'predicted: ' + line
-    cv2.waitKey(0)
+    # cv2.waitKey(0)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Single-shot detection network demo')
+    parser.add_argument('--epoch', dest='epoch', help='epoch of trained model',
+                        default=10, type=int)
+    parser.add_argument('--prefix', dest='prefix', help='trained model prefix',
+                        default=os.path.join(os.getcwd(), 'checkpoint', 'checkpoint'),
+                        type=str)
+    args = parser.parse_args()
+    return args
 
 if __name__ == '__main__':
-    TestRecognizeOne(cv2.imread("./plate/01.jpg"))
+    args = parse_args()
+    TestRecognizeOne(args.prefix, args.epoch, cv2.imread("./plate/01.jpg"))

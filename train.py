@@ -3,13 +3,12 @@
 # pylint: disable=superfluous-parens, no-member, invalid-name
 
 import sys
-sys.path.insert(0, "../../python")
+#sys.path.insert(0, "../../python")
 import mxnet as mx
 import numpy as np
 import cv2, random
 from io import BytesIO
 from genplate import *
-
 
 class OCRBatch(object):
     def __init__(self, data_names, data, label_names, label):
@@ -136,28 +135,42 @@ def Accuracy(label, pred):
         total += 1
     return 1.0 * hit / total
 
+def save_model():
+    if not os.path.exists("checkpoint"):
+        os.mkdir("checkpoint")
+    return mx.callback.do_checkpoint("checkpoint/checkpoint", 10)
 
 def train():
     network = get_ocrnet()
     devs = [mx.gpu(i) for i in range(1)]
-    model = mx.model.FeedForward(
-                                 symbol = network,
-                                 num_epoch = 1,
-                                 learning_rate = 0.001,
-                                 wd = 0.00001,
-                                 initializer = mx.init.Xavier(factor_type="in", magnitude=2.34),
-                                 momentum = 0.9)
-    batch_size = 8
-    data_train = OCRIter(500000, batch_size, 7, 30, 120)
-    data_test = OCRIter(1000, batch_size,7, 30, 120)
+
+    model = mx.mod.Module(
+        context=devs,
+        symbol=network,
+    )
+    batch_size = 32
+
+    data_train = OCRIter(20000, batch_size, 7, 30, 120)
+    data_test = OCRIter(1000, batch_size, 7, 30, 120)
 
     import logging
     head = '%(asctime)-15s %(message)s'
     logging.basicConfig(level=logging.DEBUG, format=head)
-    model.fit(X = data_train, eval_data = data_test, eval_metric = Accuracy, batch_end_callback=mx.callback.Speedometer(batch_size, 50))
-    model.save("cnn-ocr")
-    print gen_rand()
-
+    model.fit(
+        train_data=data_train,
+        eval_data=data_test,
+        eval_metric=mx.metric.np(Accuracy, allow_extra_outputs=True),
+        optimizer='sgd',
+        optimizer_params={
+            'learning_rate': 0.001,  # Learning rate
+            'momentum': 0.9,       # Momentum for SGD with momentum
+            'wd': 0.00001,         # Weight decay for regularization
+        },
+        initializer=mx.init.Xavier(factor_type="in", magnitude=2.34),
+        num_epoch=100,
+        batch_end_callback=mx.callback.Speedometer(batch_size, 50),
+        epoch_end_callback=save_model(),
+    )
 
 if __name__ == '__main__':
     train();
